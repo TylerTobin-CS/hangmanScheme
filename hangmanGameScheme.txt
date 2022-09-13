@@ -1,0 +1,398 @@
+;;Scheme Project - Tyler Tobin
+;; hang-man for REPL Scheme
+
+;; This is the directory of accessing the file containing words that can be guessed
+(define source-name "glossary.txt")
+
+
+
+
+;; Side effect:
+;; Strig-> IO([String])
+;; Passed the path, open the file containing glossary
+(define (read-words-from filename)
+  (let* ((port (open-input-file filename))
+         (res (read-word-list port '())))
+    (close-input-port port)
+    res))
+
+;; Side effect
+;; Fd -> [String] -> IO ([String])
+;; Passed port and acumulator, return the all the words as strings
+(define (read-word-list port acc)
+  (let ((stuff (read port)))
+    (if (eof-object? stuff)
+        acc
+        (read-word-list port
+                        (cons (symbol->string stuff) acc)))))
+
+(define list-of-words (read-words-from source-name))
+
+;; STATE OF THE GAME
+;; This section is choosing a word at random by calling a list reference of a random number up to the length of the list in the glossary
+
+(define wordLength (length list-of-words))
+(define randomWordIndex (random wordLength))
+(define word-to-guess (list-ref list-of-words randomWordIndex))
+(define word-to-guess-split-list (string->list word-to-guess))
+
+;;testing to see what word is being selected
+(display "Please take a guess: : ")
+;word-to-guess
+
+
+;; Defining the list of solved characters in the word to guess
+(define partial-sol (list '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\*))
+
+
+;; This section of code defines the base values of each game status element
+(define hits 0)
+(define plays 0)
+(define failures 0)
+(define total-failures 6)
+(define total-hits (length word-to-guess-split-list))
+(define glossary (map string->list list-of-words))
+
+
+
+
+;; When this function is called it will display the state of game for the user, for example the number of hits or fails
+;; IO(String)
+(define (game-status)
+  (begin
+    (format "~a H:~a/~a F:~a/~a ~a ~a"
+            (list->string partial-sol)
+            hits  total-hits
+            failures  total-failures
+            plays
+            (if (and
+                 (< hits total-hits)
+                 (< failures total-failures))
+                ""
+                (string-append "GAME-OVER(" (list->string word-to-guess-split-list) ")")))))
+
+          
+
+;;;
+;;  PURELY FUNCTIONAL
+;;
+
+;Shows how many occurrences of the word there are ================
+;; This function outputs the number of times a character is in the word to guess by filtering out the character and counting how long the new list is
+(define charGuess '#\a)
+
+
+(define (occurrences word char)  ;; word must be the word-to-guess, char can be the character about to be guessed
+  (length(filter(λ(x) (equal? x char))word))
+  )
+
+
+;==========================================find indicies (position/index)
+
+;; This section finds the position of a character within a list when called
+(define (indices word char) ;; word must be the word-to-guess, char can be the character about to be guessed
+  (let loop ((word word)
+             (ol '())
+             (idx 0))
+    (cond
+      [(empty? word) (reverse ol)]
+      [(equal? (first word) char)
+       (loop (rest word)
+             (cons idx ol)
+             (add1 idx))]
+      [else
+       (loop (rest word)
+             ol
+             (add1 idx))]))
+  
+  )
+
+;; Element is defined to test whether (indicies) works
+(define (element) (indices word-to-guess-split-list charGuess))
+
+;========================================replace indicies
+
+;; This section replaces the characters specified by an index to a new character of choice
+(define word-hidden (list '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\*))
+
+
+;;The code below is just the proccess behind replace-indicies which actually replaces the character
+(define replace-indicies-p
+
+  
+  (lambda (s pos lst fin-lst)
+    (cond
+      ((zero? pos)
+       (append (reverse (cons s fin-lst)) (rest lst)))
+      (else
+       (replace-indicies-p s (- pos 1) (rest lst) (cons (first lst) fin-lst)))))
+
+  )
+
+
+;; This is the driver code called by entering the specified arguments which will control the conditional statement
+
+(define (replace-indicies lst posit char) (cond[(null? posit) lst] ;; lst must be the word-to-guess, char can be the character about to be guessed and posit is the index to be replaced
+                                               ;; If the length of the list containing indicies is 1 the first condition will run
+                      [(   equal? (length posit)  1 ) (replace-indicies-p char (first posit) lst '())]
+                      [(   equal? (length posit)  2 ) (replace-indicies-p char (first posit) (replace-indicies-p char (second posit) lst '())'())]
+                      [(   equal? (length posit)  3 ) (replace-indicies-p char (first posit) (replace-indicies-p char (second posit) (replace-indicies-p char (third posit) lst '()) '())'())]
+                      [(   equal? (length posit)  4 ) (replace-indicies-p char (first posit) (replace-indicies-p char (second posit) (replace-indicies-p char (third posit) (replace-indicies-p char (fourth posit) lst '()) '()) '())'())]
+                      )
+  )
+
+
+
+
+;========================================
+
+;; This is short section checks the number of charcters that are not equal to a *, then the length of that list is counting proving the number of hits
+(define (noOfHits hidden) ;; hidden is the word to be solved, in this case patial-sol
+
+  (length(filter(λ(x) (not(equal? x '#\*)))hidden))
+)
+
+
+
+
+;========================================
+;; Side effects
+;; IO(String)
+
+;; Below is the side effect restart that can be called by the user after they have completed the game
+
+(define (restart)
+  (begin
+    ;; Each function is set! to the starting values once again
+    (set! word-to-guess (list-ref list-of-words (random wordLength)))
+    (set! word-to-guess-split-list (string->list word-to-guess))
+    (set! partial-sol (list '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\* '#\*))
+    (set! hits 0)
+    (set! plays 0)
+    (set! failures 0)
+    (set! total-failures 6)
+    (set! total-hits (length word-to-guess-split-list))
+
+   ;; last statement
+    (game-status)
+
+    )
+  )
+
+;;This section is the main part of the program, it is the function called by the user as their guess
+;; Char -> IO(String)
+(define (guess char) (void) ;; char is taken here as the character being guessed
+  (set! plays (+ plays 1))
+  
+  ;; A conditional to statement to set! the partially solved list to the guessed characters filled in by using the replace-indicies function the number of times the length of the list of occurences
+  
+  (cond[(equal? (occurrences word-to-guess-split-list char) 0) (set! failures (+ failures 1))]
+       [(equal? (occurrences word-to-guess-split-list char) 1)  (and(set! partial-sol (replace-indicies partial-sol (indices word-to-guess-split-list char) char))  (set! hits (+ hits 1)) )    ]
+       [(equal? (occurrences word-to-guess-split-list char) 2)  (and(set! partial-sol (replace-indicies partial-sol (indices word-to-guess-split-list char) char))  (set! hits (+ hits 2)) )    ]
+       [(equal? (occurrences word-to-guess-split-list char) 3)  (and(set! partial-sol (replace-indicies partial-sol (indices word-to-guess-split-list char) char))  (set! hits (+ hits 3)) )    ]
+       [(equal? (occurrences word-to-guess-split-list char) 4)  (and(set! partial-sol (replace-indicies partial-sol (indices word-to-guess-split-list char) char))  (set! hits (+ hits 4)) )    ])
+
+  ;; the max number of repeated characters in any word from the glossary is 4 therefore 5 list-ref index values have been included in a conditional to account for an empty value
+  
+  (game-status)
+
+  )
+
+
+;; This is another function that can be called by the user to solve the word that they have to guess
+;; IO(String)
+(define (solve word) (void)  ;; word is taken here as the character being guessed
+  ;;If the word entered is equal to the word to guess, the program will automatically set the hits to 9 and set the partially solved word to complete
+  (cond[(equal? word word-to-guess) (and(set! hits 9) (set! partial-sol word-to-guess-split-list))])
+
+  ;; then the game status is displayed the same as if it were a guess
+  (game-status)
+  )
+
+
+;;
+;; EXTRA -F3
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+   
+;; p: all-words as list of list of char
+
+
+;; The below section will find the specific words containing a value and return the list within a tree that they occur
+
+(define (find-elem listEntered char) ;; listEntered must be the list of words, char can be the character needing to be found within the list
+    (cond [(empty? listEntered) #f]
+          [(equal? (first listEntered) char) #t]
+          [(list? (first listEntered)) (or (find-elem (first listEntered) char) (find-elem (rest listEntered)char))]
+          [else (find-elem (rest listEntered) char)])
+  )
+
+(define list-of-hints '())
+
+;; driver code to be used by the next feature
+;; takes the list, character to be found and the position
+(define (words-containing-c all-words char num) ;; all-words must be the list of words, char can be the character needing to be found within the list and num must be the position used later on
+  (cond[(equal? (find-elem (list-ref all-words num) char) #t) (set! list-of-hints (cons (list-ref all-words num) list-of-hints))])
+
+  )
+
+;; The following list is a test list not to be used in the program
+(define test-list1 '(('#\c '#\a '#\t '#\r) ('#\f '#\a '#\r '#\e) ('#\p '#\o '#\p '#\a) ('#\p '#\o '#\p '#\o) ('#\t '#\e '#\s '#\t)))
+(define counter 0)
+;; the counter defined above is to be used as a quota for the repeat function used below
+
+(define (recur all-words char)
+  
+  (words-containing-c all-words char counter)
+
+  (set! counter (+ counter 1))
+  list-of-hints
+  )
+
+;; This recursive loop is used as a way to run the function (recur) a certain number of times, in this case the number of times the length of the list entered
+;;This loop is part of testing not used in the program
+(define counter2 0)
+(define (repeat func n)
+  func
+  (set! counter2 (+ counter2 1))
+  (cond[(not(equal? counter2 n)) (repeat (recur '#\a) n)])
+
+  list-of-hints
+  )
+
+
+;; This code is running the recur function the (length of the list entered) times. It checks for the words containing the character entered in each index value
+(define (words-containing-a all-words char)
+
+  (define len-of-list (length all-words))
+
+  (define counter2 0)
+  (define (repeat func n)
+    func
+    (set! counter2 (+ counter2 1))
+    (cond[(not(equal? counter2 n)) (repeat (recur all-words char) n)])
+    list-of-hints
+    )
+  (repeat (recur all-words char) len-of-list)
+  (set! counter 0)
+  )
+(define list-of-hints-a list-of-hints)
+
+;; Driver code
+(define (words-containing all-words char) ;; Takes the list to be searched through and the character to search for
+  
+  (words-containing-a all-words char)
+  (set! list-of-hints-a list-of-hints)
+  (set! list-of-hints '())
+  list-of-hints-a
+  
+  )
+
+;;===========================================
+
+;; The below section will find the specific lists within a small tree containing an exact set of values for example, only words containing strictly 'A and 'B
+;; p: all-words as list of list of char
+;;  : chars as a list of char
+
+;;If the length of the list of characters entered is equal to ay of the following conditions it will run the function words-containing a number of times over itself
+(define (words-containing-ext all-words chars)  ;; Takes the list to be searched through and the characters to search for
+  (cond [(equal? (length chars) 1) (words-containing all-words (first chars))]
+        [(equal? (length chars) 2) (words-containing (words-containing all-words (first chars)) (first(rest chars)))]
+        [(equal? (length chars) 3) (words-containing (words-containing (words-containing all-words (first chars)) (first chars)) (first(rest chars)))]
+
+        )
+
+  
+  )
+
+
+
+;===========================================
+
+;; The code below will find the specific words containing an exact set of characters for example, only words containing strictly ('A and 'B) or ('C)
+
+;;Testing
+(define test-list2 '("hello" "tyler" "random"))
+
+
+;;Counters being created
+(define counter3 0)
+(define counter4 0)
+
+
+;;Any value can be defined, will be set! later to a different value
+(define list-of-words-split-list '((#\c #\a #\l #\i #\p #\h #\a #\t #\e) (#\a #\b #\e #\r #\n #\e #\t #\h #\e) (#\c #\a #\c #\h #\e #\c #\t #\i #\c)) )
+
+
+;; the following code will convert the list of words from glossary to a list of lists containg the characters of each word
+(define (repeat4)
+  (cond)
+
+  ;; Setting the specific string from the list to a character list in to list-of-words-split-list
+  (set! list-of-words-split-list (cons(string->list (list-ref list-of-words counter4))list-of-words-split-list))
+
+  
+  (set! counter4 (+ counter4 1))
+      
+  (cond[(not(equal? counter4 85))(repeat4)]
+
+    
+      )
+)
+
+
+;; new-test-list is the final list created containging the output of the seive function
+
+(define new-list-test (list)  )
+;; IO([String])
+;; this is very hard.
+
+;;Driver code
+(define (sieve chars) (void)  ;; Takes just the Character(s) to display the words containg that character(s)
+  (begin
+    (repeat4)
+    (set! counter4 0)
+    (set! new-list-test (list))
+    (define (repeat3 n)
+
+      ;; Using the words containgin-ext feature to find any list of charcaters containging the exact words.
+      (define string-sieve (list->string(list-ref(words-containing-ext list-of-words-split-list chars)counter3)) )
+      ;; This is then made a list so it can be appended to the final list
+      (set! string-sieve (cons string-sieve '()))
+
+
+      ;; the individual siev value is appended to the greater list
+      (set! new-list-test (append new-list-test string-sieve))
+      ;need to fix problem if one char is not in the word list and reset counter problem
+    
+      (set! counter3 (+ counter3 1))
+    
+      (cond[(empty? (words-containing-ext list-of-words-split-list chars)) (set! new-list-test '())]
+           [(not(empty? (words-containing-ext list-of-words-split-list chars))) (cond[(not(equal? counter3 n)) (repeat3 n)])]
+
+           )
+
+      )
+  
+    (repeat3 (length(words-containing-ext list-of-words-split-list chars)))
+    (set! counter3 0)
+
+    )
+
+  ;;The fianl list containing all the values is displayed to the console
+  new-list-test
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
